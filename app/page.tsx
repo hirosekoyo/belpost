@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Clock, Users, CalendarIcon, Menu, RefreshCw } from "lucide-react"
+import { Clock, Users, CalendarIcon, Menu, RefreshCw, Megaphone } from "lucide-react"
 import {
   useSalonStore,
   getCurrentTime,
@@ -17,7 +17,7 @@ import {
 import { useSwipe } from "@/hooks/use-swipe"
 
 export default function HomePage() {
-  const { waitingCount, holidays, lastUpdatedTime, isReceptionClosed, refreshData } = useSalonStore()
+  const { waitingCount, holidays, lastUpdatedTime, announcement, isAnnouncementVisible, refreshData } = useSalonStore()
   const [currentTime, setCurrentTime] = useState(getCurrentTime())
   const [currentCalendarIndex, setCurrentCalendarIndex] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -26,7 +26,7 @@ export default function HomePage() {
   const calendarRef = useRef<HTMLDivElement>(null)
   const now = new Date()
   const businessHoursText = getBusinessHoursText(now, holidays)
-  const businessStatus = getCurrentBusinessStatus(now, holidays, isReceptionClosed)
+  const businessStatus = getCurrentBusinessStatus(now, holidays)
   const businessHoursInfo = getBusinessHoursInfo()
 
   // スワイプハンドラーを設定
@@ -95,6 +95,21 @@ export default function HomePage() {
       )}
 
       <div className="space-y-6">
+        {/* お知らせ表示 */}
+        {isAnnouncementVisible && announcement && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2 text-orange-800">
+                <Megaphone className="h-5 w-5" />
+                お知らせ
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-orange-700 whitespace-pre-wrap">{announcement}</p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="bg-primary text-primary-foreground">
             <CardTitle className="text-xl flex items-center justify-between">
@@ -120,21 +135,11 @@ export default function HomePage() {
             <div className="flex items-center justify-center gap-4">
               <Users className="h-10 w-10 text-muted-foreground" />
               <div className="text-center">
-                {isReceptionClosed ? (
-                  <>
-                    <p className="text-muted-foreground text-sm">受付状況</p>
-                    <p className="text-4xl font-bold text-destructive">受付終了</p>
-                    <p className="text-muted-foreground text-sm mt-2">本日の新規受付は終了いたしました</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-muted-foreground text-sm">現在の待ち人数</p>
-                    <p className="text-4xl font-bold">{waitingCount}人</p>
-                    <p className="text-muted-foreground text-sm mt-2">
-                      {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間です` : "すぐにご案内できます"}
-                    </p>
-                  </>
-                )}
+                <p className="text-muted-foreground text-sm">現在の待ち人数</p>
+                <p className="text-4xl font-bold">{waitingCount}人</p>
+                <p className="text-muted-foreground text-sm mt-2">
+                  {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間です` : "すぐにご案内できます"}
+                </p>
               </div>
             </div>
 
@@ -147,11 +152,9 @@ export default function HomePage() {
                       ? "default"
                       : businessStatus === "昼休み"
                         ? "outline"
-                        : businessStatus === "受付終了"
+                        : businessStatus === "休業日"
                           ? "destructive"
-                          : businessStatus === "休業日"
-                            ? "destructive"
-                            : "secondary"
+                          : "secondary"
                   }
                 >
                   {businessStatus}

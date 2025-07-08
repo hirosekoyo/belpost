@@ -16,7 +16,7 @@ interface SwipeOptions {
   preventDefault?: boolean
 }
 
-export function useSwipe(ref: React.RefObject<HTMLElement>, handlers: SwipeHandlers, options: SwipeOptions = {}) {
+export function useSwipe(ref: React.RefObject<HTMLElement | null>, handlers: SwipeHandlers, options: SwipeOptions = {}) {
   const { threshold = 50, preventDefault = true } = options
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null)
 

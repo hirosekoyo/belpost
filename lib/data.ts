@@ -68,12 +68,8 @@ export const getBusinessHoursText = (date: Date, holidays: HolidayData[]): strin
   return `営業時間: ${open}〜${close}（昼休み 12:00〜13:00）${isWeekend ? "（土日祝）" : "（平日）"}`
 }
 
-export const getCurrentBusinessStatus = (date: Date, holidays: HolidayData[], isReceptionClosed = false): string => {
+export const getCurrentBusinessStatus = (date: Date, holidays: HolidayData[]): string => {
   const dateString = date.toISOString().split("T")[0]
-
-  if (isReceptionClosed) {
-    return "受付終了"
-  }
 
   if (isHoliday(dateString, holidays)) {
     return "休業日"
@@ -179,7 +175,8 @@ interface SalonState {
   holidays: HolidayData[]
   haircutRecords: HaircutRecord[]
   lastUpdatedTime: string
-  isReceptionClosed: boolean
+  announcement: string
+  isAnnouncementVisible: boolean
   updateWaitingCount: (count: number) => void
   toggleHoliday: (date: string) => void
   addHaircutRecord: (type: HaircutType) => void
@@ -187,7 +184,8 @@ interface SalonState {
   getCountByDate: (date: string) => number
   updateLastUpdatedTime: () => void
   refreshData: () => void
-  toggleReceptionClosed: () => void
+  updateAnnouncement: (text: string) => void
+  toggleAnnouncementVisibility: () => void
 }
 
 // Zustandストアの作成
@@ -198,13 +196,13 @@ export const useSalonStore = create<SalonState>()(
       holidays: generateInitialHolidays(),
       haircutRecords: generateSampleRecords(),
       lastUpdatedTime: getCurrentTime(),
-      isReceptionClosed: false,
+      announcement: "", // お知らせテキスト
+      isAnnouncementVisible: false, // お知らせの表示状態
 
       updateWaitingCount: (count) =>
         set({
           waitingCount: count,
           lastUpdatedTime: getCurrentTime(),
-          isReceptionClosed: false, // 待ち人数を設定したら受付終了を解除
         }),
 
       toggleHoliday: (date) =>
@@ -253,9 +251,15 @@ export const useSalonStore = create<SalonState>()(
 
       refreshData: () => set({ lastUpdatedTime: getCurrentTime() }),
 
-      toggleReceptionClosed: () =>
+      updateAnnouncement: (text) =>
+        set({
+          announcement: text,
+          lastUpdatedTime: getCurrentTime(),
+        }),
+
+      toggleAnnouncementVisibility: () =>
         set((state) => ({
-          isReceptionClosed: !state.isReceptionClosed,
+          isAnnouncementVisible: !state.isAnnouncementVisible,
           lastUpdatedTime: getCurrentTime(),
         })),
     }),

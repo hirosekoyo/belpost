@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { CalendarIcon, ChevronLeft, ChevronRight, Scissors, Check, Users, XCircle } from "lucide-react"
+import { CalendarIcon, ChevronLeft, ChevronRight, Scissors, Check, Users, Megaphone, Eye, EyeOff } from "lucide-react"
 import { useSalonStore, getCalendarForMonth, getPrevMonth, getNextMonth, type HaircutType } from "@/lib/data"
 import { useSwipe } from "@/hooks/use-swipe"
 import { FooterNav } from "@/components/footer-nav"
@@ -15,15 +15,18 @@ export default function DashboardPage() {
   const {
     waitingCount,
     holidays,
-    isReceptionClosed,
+    announcement,
+    isAnnouncementVisible,
     updateWaitingCount,
     toggleHoliday,
     addHaircutRecord,
     updateLastUpdatedTime,
-    toggleReceptionClosed,
+    updateAnnouncement,
+    toggleAnnouncementVisibility,
   } = useSalonStore()
   const [selectedType, setSelectedType] = useState<HaircutType>("カット")
   const [feedback, setFeedback] = useState<string>("")
+  const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false)
 
   // 現在の年月を取得
   const today = new Date()
@@ -60,10 +63,26 @@ export default function DashboardPage() {
     showFeedback(`待ち人数を${count}人に設定しました`)
   }
 
-  // 受付終了の切り替え
-  const handleToggleReceptionClosed = () => {
-    toggleReceptionClosed()
-    showFeedback(isReceptionClosed ? "受付を再開しました" : "受付を終了しました")
+  // お知らせの編集開始
+  const handleAnnouncementEditStart = () => {
+    setIsEditingAnnouncement(true)
+    // 編集開始時に自動的に非表示にする
+    if (isAnnouncementVisible) {
+      toggleAnnouncementVisibility()
+    }
+  }
+
+  // お知らせの更新
+  const handleAnnouncementUpdate = (text: string) => {
+    updateAnnouncement(text)
+  }
+
+
+
+  // お知らせの表示切り替え
+  const handleToggleAnnouncementVisibility = () => {
+    toggleAnnouncementVisibility()
+    showFeedback(isAnnouncementVisible ? "お知らせを非表示にしました" : "お知らせを表示しました")
   }
 
   const handleHaircutSubmit = () => {
@@ -117,19 +136,10 @@ export default function DashboardPage() {
               <div>
                 <h3 className="text-sm font-medium mb-3">待ち人数設定</h3>
                 <div className="text-center mb-4">
-                  {isReceptionClosed ? (
-                    <>
-                      <p className="text-3xl font-bold text-destructive">受付終了</p>
-                      <p className="text-sm text-muted-foreground">新規のお客様の受付を終了しています</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-3xl font-bold text-primary">{waitingCount}人</p>
-                      <p className="text-sm text-muted-foreground">
-                        {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間` : "すぐにご案内できます"}
-                      </p>
-                    </>
-                  )}
+                  <p className="text-3xl font-bold text-primary">{waitingCount}人</p>
+                  <p className="text-sm text-muted-foreground">
+                    {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間` : "すぐにご案内できます"}
+                  </p>
                 </div>
 
                 {/* スクリーンキーボード風の数字選択 */}
@@ -137,12 +147,11 @@ export default function DashboardPage() {
                   {[0, 1, 2, 3, 4].map((num) => (
                     <Button
                       key={num}
-                      variant={!isReceptionClosed && waitingCount === num ? "default" : "outline"}
+                      variant={waitingCount === num ? "default" : "outline"}
                       size="lg"
                       onClick={() => handleWaitingCountSelect(num)}
-                      disabled={isReceptionClosed}
                       className={`h-12 text-lg font-bold ${
-                        !isReceptionClosed && waitingCount === num ? "bg-primary text-primary-foreground" : ""
+                        waitingCount === num ? "bg-primary text-primary-foreground" : ""
                       }`}
                     >
                       {num}
@@ -150,16 +159,7 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {/* 受付終了ボタン */}
-                <Button
-                  variant={isReceptionClosed ? "default" : "destructive"}
-                  size="lg"
-                  onClick={handleToggleReceptionClosed}
-                  className="w-full h-12 text-lg font-bold"
-                >
-                  <XCircle className="mr-2 h-5 w-5" />
-                  {isReceptionClosed ? "受付再開" : "受付終了"}
-                </Button>
+
               </div>
 
               <div className="border-t pt-4">
@@ -205,6 +205,55 @@ export default function DashboardPage() {
 
                 <Button onClick={handleHaircutSubmit} className="w-full mt-2">
                   <Check className="mr-2 h-4 w-4" /> 散髪完了
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* お知らせ設定カード */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Megaphone className="h-5 w-5" />
+              お知らせ設定
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">お知らせ内容</label>
+                <textarea
+                  value={announcement}
+                  onChange={(e) => handleAnnouncementUpdate(e.target.value)}
+                  onFocus={handleAnnouncementEditStart}
+                  onBlur={() => {
+                    setIsEditingAnnouncement(false)
+                    showFeedback("お知らせを更新しました")
+                  }}
+                  placeholder="お知らせを入力してください..."
+                  className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24"
+                />
+              </div>
+              <div>
+                <Button
+                  variant={isAnnouncementVisible ? "default" : "outline"}
+                  size="lg"
+                  onClick={handleToggleAnnouncementVisibility}
+                  className="w-full h-12 text-lg font-bold"
+                  disabled={isEditingAnnouncement}
+                >
+                  {isAnnouncementVisible ? (
+                    <>
+                      <EyeOff className="mr-2 h-5 w-5" />
+                      お知らせを非表示にする
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="mr-2 h-5 w-5" />
+                      お知らせを表示する
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
