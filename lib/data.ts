@@ -144,23 +144,28 @@ const generateSampleRecords = (): HaircutRecord[] => {
   const types: HaircutType[] = ["カット", "前髪", "坊主"]
   const today = new Date()
 
+  // 固定のシードを使用して一貫性のあるサンプルデータを生成
+  const seed = 12345 // 固定シード
+
   // 過去30日分のサンプルデータを生成
   for (let i = 0; i < 30; i++) {
     const date = new Date(today)
     date.setDate(date.getDate() - i)
-    const dateString = date.toISOString().split("T")[0]
+    // 日本時間での日付文字列を生成
+    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
-    // 各日に1〜5件のランダムな記録を追加
-    const recordCount = Math.floor(Math.random() * 5) + 1
+    // シードベースの擬似乱数生成
+    const daySeed = seed + i
+    const recordCount = (daySeed % 5) + 1 // 1〜5件の固定パターン
 
     for (let j = 0; j < recordCount; j++) {
-      const hours = Math.floor(Math.random() * 8) + 10 // 10時〜18時
-      const minutes = Math.floor(Math.random() * 60)
+      const hours = ((daySeed + j) % 8) + 10 // 10時〜18時
+      const minutes = (daySeed + j) % 60
       date.setHours(hours, minutes)
 
       records.push({
         id: `record-${i}-${j}`,
-        type: types[Math.floor(Math.random() * types.length)],
+        type: types[(daySeed + j) % types.length],
         timestamp: date.toISOString(),
         date: dateString,
       })
@@ -180,8 +185,13 @@ interface SalonState {
   updateWaitingCount: (count: number) => void
   toggleHoliday: (date: string) => void
   addHaircutRecord: (type: HaircutType) => void
+  updateHaircutRecord: (id: string, type: HaircutType) => void
+  updateHaircutRecordFull: (record: HaircutRecord) => void
+  deleteHaircutRecord: (id: string) => void
   getRecordsByDate: (date: string) => HaircutRecord[]
   getCountByDate: (date: string) => number
+  getStatsByDate: (date: string) => { total: number; cut: number; bangs: number; buzz: number }
+  getStatsByMonth: (year: number, month: number) => { total: number; cut: number; bangs: number; buzz: number }
   updateLastUpdatedTime: () => void
   refreshData: () => void
   updateAnnouncement: (text: string) => void
@@ -222,7 +232,8 @@ export const useSalonStore = create<SalonState>()(
       addHaircutRecord: (type) =>
         set((state) => {
           const now = new Date()
-          const dateString = now.toISOString().split("T")[0]
+          // 日本時間での日付文字列を生成
+          const dateString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
           const newRecord: HaircutRecord = {
             id: `record-${Date.now()}`,
@@ -239,12 +250,62 @@ export const useSalonStore = create<SalonState>()(
           }
         }),
 
+      updateHaircutRecord: (id, type) =>
+        set((state) => ({
+          haircutRecords: state.haircutRecords.map((record) =>
+            record.id === id ? { ...record, type } : record
+          ),
+          lastUpdatedTime: getCurrentTime(),
+        })),
+
+      updateHaircutRecordFull: (updatedRecord: HaircutRecord) =>
+        set((state) => ({
+          haircutRecords: state.haircutRecords.map((record) =>
+            record.id === updatedRecord.id ? updatedRecord : record
+          ),
+          lastUpdatedTime: getCurrentTime(),
+        })),
+
+      deleteHaircutRecord: (id) =>
+        set((state) => ({
+          haircutRecords: state.haircutRecords.filter((record) => record.id !== id),
+          lastUpdatedTime: getCurrentTime(),
+        })),
+
       getRecordsByDate: (date) => {
         return get().haircutRecords.filter((record) => record.date === date)
       },
 
       getCountByDate: (date) => {
         return get().haircutRecords.filter((record) => record.date === date).length
+      },
+
+      getStatsByDate: (date: string) => {
+        const records = get().haircutRecords.filter((record) => record.date === date)
+        const stats = {
+          total: records.length,
+          cut: records.filter(r => r.type === "カット").length,
+          bangs: records.filter(r => r.type === "前髪").length,
+          buzz: records.filter(r => r.type === "坊主").length,
+        }
+        return stats
+      },
+
+      getStatsByMonth: (year: number, month: number) => {
+        const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
+        const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-31`
+        
+        const records = get().haircutRecords.filter((record) => {
+          return record.date >= monthStart && record.date <= monthEnd
+        })
+        
+        const stats = {
+          total: records.length,
+          cut: records.filter(r => r.type === "カット").length,
+          bangs: records.filter(r => r.type === "前髪").length,
+          buzz: records.filter(r => r.type === "坊主").length,
+        }
+        return stats
       },
 
       updateLastUpdatedTime: () => set({ lastUpdatedTime: getCurrentTime() }),
@@ -278,8 +339,10 @@ export const getMonthCalendar = (year: number, month: number) => {
   const days = []
   for (let i = 1; i <= daysInMonth; i++) {
     const date = new Date(year, month, i)
+    // 日本時間での日付文字列を生成
+    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
     days.push({
-      date: date.toISOString().split("T")[0],
+      date: dateString,
       day: i,
       dayOfWeek: date.getDay(),
     })

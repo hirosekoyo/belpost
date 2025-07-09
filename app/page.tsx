@@ -81,7 +81,7 @@ export default function HomePage() {
   return (
     <div className="container mx-auto px-4 py-6 max-w-md pb-20">
       <header className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">ベルポスト美容室</h1>
+        <h1 className="text-2xl font-bold">BELPOST</h1>
         <Link href="/admin/dashboard">
           <Button variant="ghost" size="icon">
             <Menu className="h-5 w-5" />
@@ -135,11 +135,11 @@ export default function HomePage() {
             <div className="flex items-center justify-center gap-4">
               <Users className="h-10 w-10 text-muted-foreground" />
               <div className="text-center">
-                <p className="text-muted-foreground text-sm">現在の待ち人数</p>
-                <p className="text-4xl font-bold">{waitingCount}人</p>
-                <p className="text-muted-foreground text-sm mt-2">
-                  {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間です` : "すぐにご案内できます"}
-                </p>
+                    <p className="text-muted-foreground text-sm">現在の待ち人数</p>
+                    <p className="text-4xl font-bold">{waitingCount}人</p>
+                    <p className="text-muted-foreground text-sm mt-2">
+                      {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間です` : "すぐにご案内できます"}
+                    </p>
               </div>
             </div>
 
@@ -152,9 +152,9 @@ export default function HomePage() {
                       ? "default"
                       : businessStatus === "昼休み"
                         ? "outline"
-                        : businessStatus === "休業日"
-                          ? "destructive"
-                          : "secondary"
+                          : businessStatus === "休業日"
+                            ? "destructive"
+                            : "secondary"
                   }
                 >
                   {businessStatus}

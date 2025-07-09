@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { CalendarIcon, Clock, Scissors, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarIcon, Clock, Scissors, ChevronLeft, ChevronRight, Edit, Trash2, Check, X, Calendar } from "lucide-react"
 import {
   useSalonStore,
   formatDate,
@@ -14,18 +16,30 @@ import {
   getPrevMonth,
   getNextMonth,
   getCurrentDate,
+  type HaircutType,
 } from "@/lib/data"
 import { useSwipe } from "@/hooks/use-swipe"
 import { FooterNav } from "@/components/footer-nav"
 
 export default function StatsPage() {
-  const { haircutRecords, holidays, getRecordsByDate, getCountByDate } = useSalonStore()
-  const [selectedDate, setSelectedDate] = useState(getCurrentDate())
+  const { haircutRecords, holidays, getRecordsByDate, getCountByDate, getStatsByDate, getStatsByMonth, updateHaircutRecord, updateHaircutRecordFull, deleteHaircutRecord } = useSalonStore()
+  const [selectedDate, setSelectedDate] = useState("")
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
+  const [editingType, setEditingType] = useState<HaircutType>("カット")
+  const [editingDate, setEditingDate] = useState("")
+  const [editingTime, setEditingTime] = useState("")
+  const [isClient, setIsClient] = useState(false)
 
   // 現在の年月を取得
   const today = new Date()
   const [currentYear, setCurrentYear] = useState(today.getFullYear())
   const [currentMonth, setCurrentMonth] = useState(today.getMonth())
+
+  // クライアントサイドでのみ初期化
+  useEffect(() => {
+    setIsClient(true)
+    setSelectedDate(getCurrentDate())
+  }, [])
 
   const calendarData = getCalendarForMonth(currentYear, currentMonth)
   const calendarRef = useRef<HTMLDivElement>(null)
@@ -44,8 +58,66 @@ export default function StatsPage() {
     },
   })
 
-  // 選択された日付のレコードを取得
-  const selectedRecords = getRecordsByDate(selectedDate)
+  // 選択された日付のレコードを取得（日付ずれを修正）
+  const selectedRecords = isClient && selectedDate ? getRecordsByDate(selectedDate) : []
+  
+  // 集計データを取得
+  const dailyStats = isClient && selectedDate ? getStatsByDate(selectedDate) : null
+  const monthlyStats = isClient && selectedDate ? getStatsByMonth(currentYear, currentMonth) : null
+
+  // 編集開始
+  const handleEditStart = (record: any) => {
+    setEditingRecordId(record.id)
+    setEditingType(record.type)
+    
+    // 日付と時刻を設定（選択した日付を使用）
+    const recordDate = new Date(record.timestamp)
+    // 選択した日付を基準にする
+    const selectedDateObj = new Date(selectedDate)
+    const editingDateString = `${selectedDateObj.getFullYear()}-${String(selectedDateObj.getMonth() + 1).padStart(2, '0')}-${String(selectedDateObj.getDate()).padStart(2, '0')}`
+    setEditingDate(editingDateString)
+    setEditingTime(`${String(recordDate.getHours()).padStart(2, '0')}:${String(recordDate.getMinutes()).padStart(2, '0')}`)
+  }
+
+  // 編集完了
+  const handleEditComplete = () => {
+    if (editingRecordId) {
+      // 日付と時刻を組み合わせてタイムスタンプを生成
+      const [hours, minutes] = editingTime.split(':').map(Number)
+      const newDate = new Date(editingDate)
+      newDate.setHours(hours, minutes, 0, 0)
+      
+      // 新しい日付文字列を生成
+      const newDateString = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}-${String(newDate.getDate()).padStart(2, '0')}`
+      
+      // 記録を更新（日付とタイプの両方）
+      const updatedRecord = {
+        id: editingRecordId,
+        type: editingType,
+        timestamp: newDate.toISOString(),
+        date: newDateString,
+      }
+      
+      // 記録を完全に更新
+      updateHaircutRecordFull(updatedRecord)
+      
+      setEditingRecordId(null)
+    }
+  }
+
+  // 編集キャンセル
+  const handleEditCancel = () => {
+    setEditingRecordId(null)
+  }
+
+  // 記録削除
+  const handleDeleteRecord = (id: string) => {
+    if (confirm("この記録を削除しますか？")) {
+      deleteHaircutRecord(id)
+    }
+  }
+
+
 
   // 前月へ移動
   const handlePrevMonth = () => {
@@ -65,6 +137,18 @@ export default function StatsPage() {
   const isHoliday = (date: string) => {
     const holiday = holidays.find((h) => h.date === date)
     return holiday?.isHoliday || false
+  }
+
+  // クライアントサイドでのみレンダリング
+  if (!isClient) {
+    return (
+      <div className="container mx-auto px-4 py-6 max-w-md pb-20">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold">散髪集計</h1>
+        </header>
+        <div className="text-center py-8 text-muted-foreground">読み込み中...</div>
+      </div>
+    )
   }
 
   return (
@@ -107,7 +191,7 @@ export default function StatsPage() {
                 ))}
 
                 {calendarData.days.map((day) => {
-                  const count = getCountByDate(day.date)
+                  const count = isClient ? getCountByDate(day.date) : 0
                   return (
                     <button
                       key={day.date}
@@ -125,7 +209,7 @@ export default function StatsPage() {
                       }`}
                     >
                       {day.day}
-                      {count > 0 && <Badge className="absolute top-0 right-0 text-[8px] h-4 min-w-4">{count}</Badge>}
+                      {isClient && count > 0 && <Badge className="absolute top-0 right-0 text-[8px] h-4 min-w-4">{count}</Badge>}
                       {isHoliday(day.date) && count === 0 && (
                         <Badge variant="destructive" className="absolute top-0 right-0 text-[8px] h-3 min-w-3 px-0.5">
                           休
@@ -138,7 +222,6 @@ export default function StatsPage() {
             </CardContent>
           </Card>
         </div>
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -148,36 +231,198 @@ export default function StatsPage() {
           </CardHeader>
           <CardContent>
             {selectedRecords.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>時間</TableHead>
-                    <TableHead>カットタイプ</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedRecords
-                    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                    .map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            {formatTime(record.timestamp)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{record.type}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
+              <div className="space-y-3">
+                {selectedRecords
+                  .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                  .map((record, index) => (
+                    <div
+                      key={record.id}
+                      className="relative overflow-hidden rounded-lg border bg-card"
+                    >
+                      <div className="p-4">
+                        {editingRecordId === record.id ? (
+                            // 編集モード
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-sm font-medium mb-2 block">日付</label>
+                                  <Input
+                                    type="date"
+                                    value={editingDate}
+                                    onChange={(e) => setEditingDate(e.target.value)}
+                                    className="w-full"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium mb-2 block">時刻</label>
+                                  <Input
+                                    type="time"
+                                    value={editingTime}
+                                    onChange={(e) => setEditingTime(e.target.value)}
+                                    className="w-full"
+                                  />
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">カットタイプ</label>
+                                <RadioGroup
+                                  value={editingType}
+                                  onValueChange={(value) => setEditingType(value as HaircutType)}
+                                  className="grid grid-cols-3 gap-2"
+                                >
+                                  <div>
+                                    <RadioGroupItem value="カット" id={`cut-${record.id}`} className="peer sr-only" />
+                                    <Label
+                                      htmlFor={`cut-${record.id}`}
+                                      className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                                    >
+                                      <Scissors className="mb-2 h-5 w-5" />
+                                      <span className="text-sm">カット</span>
+                                    </Label>
+                                  </div>
+                                  <div>
+                                    <RadioGroupItem value="前髪" id={`bangs-${record.id}`} className="peer sr-only" />
+                                    <Label
+                                      htmlFor={`bangs-${record.id}`}
+                                      className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                                    >
+                                      <Scissors className="mb-2 h-5 w-5" />
+                                      <span className="text-sm">前髪</span>
+                                    </Label>
+                                  </div>
+                                  <div>
+                                    <RadioGroupItem value="坊主" id={`buzz-${record.id}`} className="peer sr-only" />
+                                    <Label
+                                      htmlFor={`buzz-${record.id}`}
+                                      className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                                    >
+                                      <Scissors className="mb-2 h-5 w-5" />
+                                      <span className="text-sm">坊主</span>
+                                    </Label>
+                                  </div>
+                                </RadioGroup>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="default"
+                                  onClick={handleEditComplete}
+                                  className="flex-1"
+                                >
+                                  <Check className="mr-2 h-4 w-4" />
+                                  保存
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={handleEditCancel}
+                                  className="flex-1"
+                                >
+                                  <X className="mr-2 h-4 w-4" />
+                                  キャンセル
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            // 通常表示モード
+                            <div
+                              className="flex items-center justify-between cursor-pointer"
+                              onClick={() => handleEditStart(record)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-5 w-5 text-muted-foreground" />
+                                  <span className="font-medium">{formatTime(record.timestamp)}</span>
+                                </div>
+                                <Badge variant="outline">{record.type}</Badge>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (confirm("この記録を削除しますか？")) {
+                                    deleteHaircutRecord(record.id)
+                                  }
+                                }}
+                                className="p-1 hover:bg-red-100 rounded"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </button>
+                            </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">この日の記録はありません</div>
             )}
           </CardContent>
         </Card>
+
+        {/* 日付毎の集計 */}
+        {dailyStats && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Scissors className="h-5 w-5" />
+                {formatDate(selectedDate)}の集計
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-4 gap-4 text-center">
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-primary">{dailyStats.total}</div>
+                  <div className="text-sm text-muted-foreground">合計</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-blue-600">{dailyStats.cut}</div>
+                  <div className="text-sm text-muted-foreground">カット</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-green-600">{dailyStats.bangs}</div>
+                  <div className="text-sm text-muted-foreground">前髪</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-orange-600">{dailyStats.buzz}</div>
+                  <div className="text-sm text-muted-foreground">坊主</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 月毎の集計 */}
+        {monthlyStats && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Calendar className="h-5 w-5" />
+                {currentYear}年{currentMonth + 1}月の集計
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-4 gap-4 text-center">
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-primary">{monthlyStats.total}</div>
+                  <div className="text-sm text-muted-foreground">合計</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-blue-600">{monthlyStats.cut}</div>
+                  <div className="text-sm text-muted-foreground">カット</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-green-600">{monthlyStats.bangs}</div>
+                  <div className="text-sm text-muted-foreground">前髪</div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-orange-600">{monthlyStats.buzz}</div>
+                  <div className="text-sm text-muted-foreground">坊主</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
 
         <div className="fixed bottom-20 left-0 right-0 text-center text-xs text-muted-foreground">
           <p>左右にスワイプして月を切り替えられます</p>

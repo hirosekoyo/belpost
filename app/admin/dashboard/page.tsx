@@ -136,10 +136,10 @@ export default function DashboardPage() {
               <div>
                 <h3 className="text-sm font-medium mb-3">待ち人数設定</h3>
                 <div className="text-center mb-4">
-                  <p className="text-3xl font-bold text-primary">{waitingCount}人</p>
-                  <p className="text-sm text-muted-foreground">
-                    {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間` : "すぐにご案内できます"}
-                  </p>
+                      <p className="text-3xl font-bold text-primary">{waitingCount}人</p>
+                      <p className="text-sm text-muted-foreground">
+                        {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間` : "すぐにご案内できます"}
+                      </p>
                 </div>
 
                 {/* スクリーンキーボード風の数字選択 */}
