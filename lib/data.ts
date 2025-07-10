@@ -185,6 +185,7 @@ interface SalonState {
   updateWaitingCount: (count: number) => void
   toggleHoliday: (date: string) => void
   addHaircutRecord: (type: HaircutType) => void
+  addHaircutRecordWithDateTime: (type: HaircutType, date: string, time: string) => void
   updateHaircutRecord: (id: string, type: HaircutType) => void
   updateHaircutRecordFull: (record: HaircutRecord) => void
   deleteHaircutRecord: (id: string) => void
@@ -246,6 +247,26 @@ export const useSalonStore = create<SalonState>()(
             haircutRecords: [...state.haircutRecords, newRecord],
             // 散髪完了したら待ち人数を減らす（0未満にはならないように）
             waitingCount: Math.max(0, state.waitingCount - 1),
+            lastUpdatedTime: getCurrentTime(),
+          }
+        }),
+
+      addHaircutRecordWithDateTime: (type: HaircutType, date: string, time: string) =>
+        set((state) => {
+          // 日付と時刻を組み合わせてタイムスタンプを生成
+          const [hours, minutes] = time.split(':').map(Number)
+          const recordDate = new Date(date)
+          recordDate.setHours(hours, minutes, 0, 0)
+
+          const newRecord: HaircutRecord = {
+            id: `record-${Date.now()}`,
+            type,
+            timestamp: recordDate.toISOString(),
+            date: date,
+          }
+
+          return {
+            haircutRecords: [...state.haircutRecords, newRecord],
             lastUpdatedTime: getCurrentTime(),
           }
         }),

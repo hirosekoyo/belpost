@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, Scissors, ChevronLeft, ChevronRight, Edit, Trash2, Check, X, Calendar } from "lucide-react"
+import { CalendarIcon, Clock, Scissors, ChevronLeft, ChevronRight, Edit, Trash2, Check, X, Calendar, Plus } from "lucide-react"
 import {
   useSalonStore,
   formatDate,
@@ -22,12 +22,13 @@ import { useSwipe } from "@/hooks/use-swipe"
 import { FooterNav } from "@/components/footer-nav"
 
 export default function StatsPage() {
-  const { haircutRecords, holidays, getRecordsByDate, getCountByDate, getStatsByDate, getStatsByMonth, updateHaircutRecord, updateHaircutRecordFull, deleteHaircutRecord } = useSalonStore()
+  const { haircutRecords, holidays, getRecordsByDate, getCountByDate, getStatsByDate, getStatsByMonth, updateHaircutRecord, updateHaircutRecordFull, deleteHaircutRecord, addHaircutRecordWithDateTime } = useSalonStore()
   const [selectedDate, setSelectedDate] = useState("")
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
   const [editingType, setEditingType] = useState<HaircutType>("カット")
   const [editingDate, setEditingDate] = useState("")
   const [editingTime, setEditingTime] = useState("")
+  const [isAddingNew, setIsAddingNew] = useState(false)
   const [isClient, setIsClient] = useState(false)
 
   // 現在の年月を取得
@@ -79,6 +80,20 @@ export default function StatsPage() {
     setEditingTime(`${String(recordDate.getHours()).padStart(2, '0')}:${String(recordDate.getMinutes()).padStart(2, '0')}`)
   }
 
+  // 新規追加開始
+  const handleAddStart = () => {
+    setIsAddingNew(true)
+    setEditingType("カット")
+    
+    // 選択した日付と現在時刻を設定
+    const selectedDateObj = new Date(selectedDate)
+    const editingDateString = `${selectedDateObj.getFullYear()}-${String(selectedDateObj.getMonth() + 1).padStart(2, '0')}-${String(selectedDateObj.getDate()).padStart(2, '0')}`
+    setEditingDate(editingDateString)
+    
+    const now = new Date()
+    setEditingTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`)
+  }
+
   // 編集完了
   const handleEditComplete = () => {
     if (editingRecordId) {
@@ -105,9 +120,18 @@ export default function StatsPage() {
     }
   }
 
+  // 新規追加完了
+  const handleAddComplete = () => {
+    // 新しい記録を追加
+    addHaircutRecordWithDateTime(editingType, editingDate, editingTime)
+    
+    setIsAddingNew(false)
+  }
+
   // 編集キャンセル
   const handleEditCancel = () => {
     setEditingRecordId(null)
+    setIsAddingNew(false)
   }
 
   // 記録削除
@@ -230,17 +254,18 @@ export default function StatsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {selectedRecords.length > 0 ? (
-              <div className="space-y-3">
-                {selectedRecords
-                  .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                  .map((record, index) => (
-                    <div
-                      key={record.id}
-                      className="relative overflow-hidden rounded-lg border bg-card"
-                    >
-                      <div className="p-4">
-                        {editingRecordId === record.id ? (
+            <div className="space-y-3">
+              {selectedRecords.length > 0 && (
+                <>
+                  {selectedRecords
+                    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                    .map((record, index) => (
+                      <div
+                        key={record.id}
+                        className="relative overflow-hidden rounded-lg border bg-card"
+                      >
+                        <div className="p-4">
+                          {editingRecordId === record.id ? (
                             // 編集モード
                             <div className="space-y-4">
                               <div className="grid grid-cols-2 gap-3">
@@ -348,14 +373,119 @@ export default function StatsPage() {
                                 <Trash2 className="h-4 w-4 text-red-500" />
                               </button>
                             </div>
-                        )}
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </>
+              )}
+
+              {/* 新規追加モード */}
+              {isAddingNew && (
+                <div className="relative overflow-hidden rounded-lg border bg-card">
+                  <div className="p-4">
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-sm font-medium mb-2 block">日付</label>
+                          <Input
+                            type="date"
+                            value={editingDate}
+                            onChange={(e) => setEditingDate(e.target.value)}
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium mb-2 block">時刻</label>
+                          <Input
+                            type="time"
+                            value={editingTime}
+                            onChange={(e) => setEditingTime(e.target.value)}
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">カットタイプ</label>
+                        <RadioGroup
+                          value={editingType}
+                          onValueChange={(value) => setEditingType(value as HaircutType)}
+                          className="grid grid-cols-3 gap-2"
+                        >
+                          <div>
+                            <RadioGroupItem value="カット" id="cut-new" className="peer sr-only" />
+                            <Label
+                              htmlFor="cut-new"
+                              className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                            >
+                              <Scissors className="mb-2 h-5 w-5" />
+                              <span className="text-sm">カット</span>
+                            </Label>
+                          </div>
+                          <div>
+                            <RadioGroupItem value="前髪" id="bangs-new" className="peer sr-only" />
+                            <Label
+                              htmlFor="bangs-new"
+                              className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                            >
+                              <Scissors className="mb-2 h-5 w-5" />
+                              <span className="text-sm">前髪</span>
+                            </Label>
+                          </div>
+                          <div>
+                            <RadioGroupItem value="坊主" id="buzz-new" className="peer sr-only" />
+                            <Label
+                              htmlFor="buzz-new"
+                              className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                            >
+                              <Scissors className="mb-2 h-5 w-5" />
+                              <span className="text-sm">坊主</span>
+                            </Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="default"
+                          onClick={handleAddComplete}
+                          className="flex-1"
+                        >
+                          <Check className="mr-2 h-4 w-4" />
+                          追加
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleEditCancel}
+                          className="flex-1"
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          キャンセル
+                        </Button>
                       </div>
                     </div>
-                  ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">この日の記録はありません</div>
-            )}
+                  </div>
+                </div>
+              )}
+
+              {/* 新規追加ボタン */}
+              {!isAddingNew && (
+                <button
+                  onClick={handleAddStart}
+                  className="w-full p-4 border-2 border-dashed border-muted-foreground/25 rounded-lg hover:border-muted-foreground/50 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                    <Plus className="h-5 w-5" />
+                    <span>新しい記録を追加</span>
+                  </div>
+                </button>
+              )}
+
+              {selectedRecords.length === 0 && !isAddingNew && (
+                <div className="text-center py-8 text-muted-foreground">この日の記録はありません</div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
