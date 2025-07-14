@@ -26,7 +26,6 @@ export default function StatsPage() {
   const [selectedDate, setSelectedDate] = useState("")
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
   const [editingType, setEditingType] = useState<HaircutType>("カット")
-  const [editingDate, setEditingDate] = useState("")
   const [editingTime, setEditingTime] = useState("")
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [isClient, setIsClient] = useState(false)
@@ -71,12 +70,8 @@ export default function StatsPage() {
     setEditingRecordId(record.id)
     setEditingType(record.type)
     
-    // 日付と時刻を設定（選択した日付を使用）
+    // 時刻のみを設定
     const recordDate = new Date(record.timestamp)
-    // 選択した日付を基準にする
-    const selectedDateObj = new Date(selectedDate)
-    const editingDateString = `${selectedDateObj.getFullYear()}-${String(selectedDateObj.getMonth() + 1).padStart(2, '0')}-${String(selectedDateObj.getDate()).padStart(2, '0')}`
-    setEditingDate(editingDateString)
     setEditingTime(`${String(recordDate.getHours()).padStart(2, '0')}:${String(recordDate.getMinutes()).padStart(2, '0')}`)
   }
 
@@ -85,11 +80,7 @@ export default function StatsPage() {
     setIsAddingNew(true)
     setEditingType("カット")
     
-    // 選択した日付と現在時刻を設定
-    const selectedDateObj = new Date(selectedDate)
-    const editingDateString = `${selectedDateObj.getFullYear()}-${String(selectedDateObj.getMonth() + 1).padStart(2, '0')}-${String(selectedDateObj.getDate()).padStart(2, '0')}`
-    setEditingDate(editingDateString)
-    
+    // 現在時刻を設定
     const now = new Date()
     setEditingTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`)
   }
@@ -97,19 +88,19 @@ export default function StatsPage() {
   // 編集完了
   const handleEditComplete = () => {
     if (editingRecordId) {
-      // 日付と時刻を組み合わせてタイムスタンプを生成
+      // 選択した日付と時刻を組み合わせてタイムスタンプを生成
       const [hours, minutes] = editingTime.split(':').map(Number)
-      const newDate = new Date(editingDate)
-      newDate.setHours(hours, minutes, 0, 0)
+      const selectedDateObj = new Date(selectedDate)
+      selectedDateObj.setHours(hours, minutes, 0, 0)
       
       // 新しい日付文字列を生成
-      const newDateString = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}-${String(newDate.getDate()).padStart(2, '0')}`
+      const newDateString = `${selectedDateObj.getFullYear()}-${String(selectedDateObj.getMonth() + 1).padStart(2, '0')}-${String(selectedDateObj.getDate()).padStart(2, '0')}`
       
       // 記録を更新（日付とタイプの両方）
       const updatedRecord = {
         id: editingRecordId,
         type: editingType,
-        timestamp: newDate.toISOString(),
+        timestamp: selectedDateObj.toISOString(),
         date: newDateString,
       }
       
@@ -122,8 +113,10 @@ export default function StatsPage() {
 
   // 新規追加完了
   const handleAddComplete = () => {
-    // 新しい記録を追加
-    addHaircutRecordWithDateTime(editingType, editingDate, editingTime)
+    // 選択した日付で新しい記録を追加
+    const selectedDateObj = new Date(selectedDate)
+    const editingDateString = `${selectedDateObj.getFullYear()}-${String(selectedDateObj.getMonth() + 1).padStart(2, '0')}-${String(selectedDateObj.getDate()).padStart(2, '0')}`
+    addHaircutRecordWithDateTime(editingType, editingDateString, editingTime)
     
     setIsAddingNew(false)
   }
@@ -268,25 +261,14 @@ export default function StatsPage() {
                           {editingRecordId === record.id ? (
                             // 編集モード
                             <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="text-sm font-medium mb-2 block">日付</label>
-                                  <Input
-                                    type="date"
-                                    value={editingDate}
-                                    onChange={(e) => setEditingDate(e.target.value)}
-                                    className="w-full"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium mb-2 block">時刻</label>
-                                  <Input
-                                    type="time"
-                                    value={editingTime}
-                                    onChange={(e) => setEditingTime(e.target.value)}
-                                    className="w-full"
-                                  />
-                                </div>
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">時刻</label>
+                                <Input
+                                  type="time"
+                                  value={editingTime}
+                                  onChange={(e) => setEditingTime(e.target.value)}
+                                  className="w-full"
+                                />
                               </div>
                               
                               <div>
@@ -385,25 +367,14 @@ export default function StatsPage() {
                 <div className="relative overflow-hidden rounded-lg border bg-card">
                   <div className="p-4">
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-sm font-medium mb-2 block">日付</label>
-                          <Input
-                            type="date"
-                            value={editingDate}
-                            onChange={(e) => setEditingDate(e.target.value)}
-                            className="w-full"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium mb-2 block">時刻</label>
-                          <Input
-                            type="time"
-                            value={editingTime}
-                            onChange={(e) => setEditingTime(e.target.value)}
-                            className="w-full"
-                          />
-                        </div>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">時刻</label>
+                        <Input
+                          type="time"
+                          value={editingTime}
+                          onChange={(e) => setEditingTime(e.target.value)}
+                          className="w-full"
+                        />
                       </div>
                       
                       <div>
