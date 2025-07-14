@@ -136,9 +136,9 @@ export default function DashboardPage() {
               <div>
                 <h3 className="text-sm font-medium mb-3">待ち人数設定</h3>
                 <div className="text-center mb-4">
-                      <p className="text-3xl font-bold text-primary">{waitingCount}人</p>
+                      <p className="text-3xl font-bold text-primary">{waitingCount === 5 ? "受付終了" : `${waitingCount}人`}</p>
                       <p className="text-sm text-muted-foreground">
-                        {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間` : "すぐにご案内できます"}
+                        {waitingCount === 5 ? "本日の受付は終了しました" : waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間` : "すぐにご案内できます"}
                       </p>
                 </div>
 
@@ -157,6 +157,20 @@ export default function DashboardPage() {
                       {num}
                     </Button>
                   ))}
+                </div>
+                
+                {/* 受付終了ボタン */}
+                <div className="mt-3">
+                  <Button
+                    variant={waitingCount === 5 ? "destructive" : "outline"}
+                    size="lg"
+                    onClick={() => handleWaitingCountSelect(5)}
+                    className={`w-full h-12 text-lg font-bold ${
+                      waitingCount === 5 ? "bg-destructive text-destructive-foreground" : ""
+                    }`}
+                  >
+                    受付終了
+                  </Button>
                 </div>
 
 

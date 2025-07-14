@@ -136,10 +136,21 @@ export default function HomePage() {
               <Users className="h-10 w-10 text-muted-foreground" />
               <div className="text-center">
                     <p className="text-muted-foreground text-sm">現在の待ち人数</p>
-                    <p className="text-4xl font-bold">{waitingCount}人</p>
-                    <p className="text-muted-foreground text-sm mt-2">
-                      {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間です` : "すぐにご案内できます"}
-                    </p>
+                    {waitingCount === 5 ? (
+                      <>
+                        <p className="text-4xl font-bold text-destructive">受付終了</p>
+                        <p className="text-muted-foreground text-sm mt-2">
+                          本日の受付は終了しました
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-4xl font-bold">{waitingCount}人</p>
+                        <p className="text-muted-foreground text-sm mt-2">
+                          {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間です` : "すぐにご案内できます"}
+                        </p>
+                      </>
+                    )}
               </div>
             </div>
 

@@ -4,9 +4,8 @@ import { useState, useRef } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Plus, Minus, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react"
+import { ArrowLeft, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react"
 import { useSalonStore, getCalendarForMonth, getPrevMonth, getNextMonth } from "@/lib/data"
 import { useSwipe } from "@/hooks/use-swipe"
 
@@ -36,13 +35,7 @@ export default function WaitingPage() {
     },
   })
 
-  const handleIncrement = () => {
-    setCount((prev) => prev + 1)
-  }
 
-  const handleDecrement = () => {
-    setCount((prev) => Math.max(0, prev - 1))
-  }
 
   const handleSave = () => {
     updateWaitingCount(count)
@@ -85,27 +78,50 @@ export default function WaitingPage() {
             <CardTitle className="text-lg">待ち人数設定</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4">
-              <Button variant="outline" size="icon" onClick={handleDecrement}>
-                <Minus className="h-4 w-4" />
-              </Button>
+            <div className="space-y-4">
+              {/* 現在の待ち人数表示 */}
+              <div className="text-center mb-4">
+                <p className="text-3xl font-bold text-primary">{count}人</p>
+                <p className="text-sm text-muted-foreground">
+                  {count === 5 ? "受付終了" : count > 0 ? `およそ ${count * 25} 分のお待ち時間` : "すぐにご案内できます"}
+                </p>
+              </div>
 
-              <Input
-                type="number"
-                min="0"
-                value={count}
-                onChange={(e) => setCount(Number.parseInt(e.target.value) || 0)}
-                className="text-center"
-              />
+              {/* スクリーンキーボード風の数字選択 */}
+              <div className="grid grid-cols-5 gap-2">
+                {[0, 1, 2, 3, 4].map((num) => (
+                  <Button
+                    key={num}
+                    variant={count === num ? "default" : "outline"}
+                    size="lg"
+                    onClick={() => setCount(num)}
+                    className={`h-12 text-lg font-bold ${
+                      count === num ? "bg-primary text-primary-foreground" : ""
+                    }`}
+                  >
+                    {num}
+                  </Button>
+                ))}
+              </div>
+              
+              {/* 受付終了ボタン */}
+              <div>
+                <Button
+                  variant={count === 5 ? "destructive" : "outline"}
+                  size="lg"
+                  onClick={() => setCount(5)}
+                  className={`w-full h-12 text-lg font-bold ${
+                    count === 5 ? "bg-destructive text-destructive-foreground" : ""
+                  }`}
+                >
+                  受付終了
+                </Button>
+              </div>
 
-              <Button variant="outline" size="icon" onClick={handleIncrement}>
-                <Plus className="h-4 w-4" />
+              <Button onClick={handleSave} className="w-full">
+                保存
               </Button>
             </div>
-
-            <Button onClick={handleSave} className="w-full mt-4">
-              保存
-            </Button>
           </CardContent>
         </Card>
 
