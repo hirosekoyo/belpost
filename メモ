@@ -2,20 +2,23 @@
 https://isqzroqysdxdxacykyop.supabase.co
 
 
-ありがとうございます。
-これらを踏まえて以下の構成で実装します。
+現在はサンプルデータを使っていますが
+supabeseを使ってデータベースで実装しようと思います。
+以下のテーブルを作成しますので
+supabaseにテーブル作成するためのSQLをお願いします。
+また、supabaseを利用するための手順も教えてください。
 
 1. 待ち人数テーブル
 待ち人数（num）
 お知らせ内容（string）
 お知らせ表示フラグ（boolean）
-id: 主キー（将来的な拡張性のため）
 updated_at: 最終更新時刻（現在のアプリで使用されているlastUpdatedTimeに対応）
 
 2. 店休日・祝日テーブル
 日付（date）
 店休日フラグ（boolean）
 祝日フラグ（boolean）
+祝日名（string）
 
 3. カット記録テーブル
 日付（date）
@@ -27,5 +30,4 @@ updated_at: 最終更新時刻（現在のアプリで使用されているlastU
 月別統計ビュー
 
 以上。
-supabaseにテーブル作成するためのSQLをお願いします。
-また、supabaseを利用するための手順も押してください。
+
