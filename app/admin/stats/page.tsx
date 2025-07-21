@@ -17,12 +17,20 @@ import {
   getNextMonth,
   getCurrentDate,
   type HaircutType,
+  updateHaircutRecordInSupabase,
+  haircutTypeToNumber,
 } from "@/lib/data"
 import { useSwipe } from "@/hooks/use-swipe"
 import { FooterNav } from "@/components/footer-nav"
 
 export default function StatsPage() {
-  const { haircutRecords, holidays, getRecordsByDate, getCountByDate, getStatsByDate, getStatsByMonth, updateHaircutRecord, updateHaircutRecordFull, deleteHaircutRecord, addHaircutRecordWithDateTime } = useSalonStore()
+  const {
+    haircutRecords,
+    fetchHaircutRecordsFromDB,
+    addHaircutRecordWithDateTimeToDB,
+    deleteHaircutRecordFromDB,
+    holidays,
+  } = useSalonStore()
   const [selectedDate, setSelectedDate] = useState("")
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
   const [editingType, setEditingType] = useState<HaircutType>("カット")
@@ -38,7 +46,8 @@ export default function StatsPage() {
   // クライアントサイドでのみ初期化
   useEffect(() => {
     setIsClient(true)
-    setSelectedDate(getCurrentDate())
+    setSelectedDate(getCurrentDate()) // 当日の日付を設定
+    fetchHaircutRecordsFromDB()
   }, [])
 
   const calendarData = getCalendarForMonth(currentYear, currentMonth)
@@ -58,12 +67,26 @@ export default function StatsPage() {
     },
   })
 
-  // 選択された日付のレコードを取得（日付ずれを修正）
-  const selectedRecords = isClient && selectedDate ? getRecordsByDate(selectedDate) : []
-  
-  // 集計データを取得
-  const dailyStats = isClient && selectedDate ? getStatsByDate(selectedDate) : null
-  const monthlyStats = isClient && selectedDate ? getStatsByMonth(currentYear, currentMonth) : null
+  // 日付でフィルタ
+  const selectedRecords = isClient && selectedDate ? haircutRecords.filter(r => r.date === selectedDate) : []
+  // 日別集計
+  const dailyStats = isClient && selectedDate ? {
+    total: selectedRecords.length,
+    cut: selectedRecords.filter(r => r.type === "カット").length,
+    bangs: selectedRecords.filter(r => r.type === "前髪").length,
+    buzz: selectedRecords.filter(r => r.type === "坊主").length,
+  } : null
+  // 月別集計
+  const monthlyRecords = isClient ? haircutRecords.filter(r => {
+    const d = new Date(r.date)
+    return d.getFullYear() === currentYear && d.getMonth() === currentMonth
+  }) : []
+  const monthlyStats = isClient ? {
+    total: monthlyRecords.length,
+    cut: monthlyRecords.filter(r => r.type === "カット").length,
+    bangs: monthlyRecords.filter(r => r.type === "前髪").length,
+    buzz: monthlyRecords.filter(r => r.type === "坊主").length,
+  } : null
 
   // 編集開始
   const handleEditStart = (record: any) => {
@@ -86,37 +109,31 @@ export default function StatsPage() {
   }
 
   // 編集完了
-  const handleEditComplete = () => {
+  const handleEditComplete = async () => {
     if (editingRecordId) {
       // 選択した日付と時刻を組み合わせてタイムスタンプを生成
       const [hours, minutes] = editingTime.split(':').map(Number)
       const selectedDateObj = new Date(selectedDate)
       selectedDateObj.setHours(hours, minutes, 0, 0)
-      
       // 新しい日付文字列を生成
       const newDateString = `${selectedDateObj.getFullYear()}-${String(selectedDateObj.getMonth() + 1).padStart(2, '0')}-${String(selectedDateObj.getDate()).padStart(2, '0')}`
-      
-      // 記録を更新（日付とタイプの両方）
-      const updatedRecord = {
-        id: editingRecordId,
-        type: editingType,
-        timestamp: selectedDateObj.toISOString(),
+      // Supabaseに更新
+      await updateHaircutRecordInSupabase(Number(editingRecordId), {
         date: newDateString,
-      }
-      
-      // 記録を完全に更新
-      updateHaircutRecordFull(updatedRecord)
-      
+        time: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`,
+        haircut_type: haircutTypeToNumber(editingType),
+      })
+      await fetchHaircutRecordsFromDB()
       setEditingRecordId(null)
     }
   }
 
   // 新規追加完了
-  const handleAddComplete = () => {
+  const handleAddComplete = async () => {
     // 選択した日付で新しい記録を追加
     const selectedDateObj = new Date(selectedDate)
     const editingDateString = `${selectedDateObj.getFullYear()}-${String(selectedDateObj.getMonth() + 1).padStart(2, '0')}-${String(selectedDateObj.getDate()).padStart(2, '0')}`
-    addHaircutRecordWithDateTime(editingType, editingDateString, editingTime)
+    await addHaircutRecordWithDateTimeToDB(editingType, editingDateString, editingTime)
     
     setIsAddingNew(false)
   }
@@ -128,9 +145,9 @@ export default function StatsPage() {
   }
 
   // 記録削除
-  const handleDeleteRecord = (id: string) => {
-    if (confirm("この記録を削除しますか？")) {
-      deleteHaircutRecord(id)
+  const handleDeleteRecord = async (id: string) => {
+    if (confirm('この記録を削除しますか？')) {
+      await deleteHaircutRecordFromDB(Number(id))
     }
   }
 
@@ -152,8 +169,8 @@ export default function StatsPage() {
 
   // 休日かどうかを判定する関数
   const isHoliday = (date: string) => {
-    const holiday = holidays.find((h) => h.date === date)
-    return holiday?.isHoliday || false
+    const h = (holidays as any[]).find((h) => h.date === date)
+    return h?.isHoliday === true || h?.is_holiday === true
   }
 
   // クライアントサイドでのみレンダリング
@@ -208,7 +225,7 @@ export default function StatsPage() {
                 ))}
 
                 {calendarData.days.map((day) => {
-                  const count = isClient ? getCountByDate(day.date) : 0
+                  const count = isClient ? haircutRecords.filter(r => r.date === day.date).length : 0
                   return (
                     <button
                       key={day.date}
@@ -346,9 +363,7 @@ export default function StatsPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  if (confirm("この記録を削除しますか？")) {
-                                    deleteHaircutRecord(record.id)
-                                  }
+                                  handleDeleteRecord(record.id)
                                 }}
                                 className="p-1 hover:bg-red-100 rounded"
                               >

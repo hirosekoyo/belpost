@@ -1,7 +1,84 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { supabase } from './supabaseClient';
 
-export type HaircutType = "カット" | "前髪" | "坊主"
+// --- カットタイプ変換 ---
+export type HaircutType = "カット" | "前髪" | "坊主";
+
+export function haircutTypeToNumber(type: HaircutType): number {
+  if (type === "カット") return 1;
+  if (type === "前髪") return 2;
+  if (type === "坊主") return 3;
+  return 1;
+}
+export function numberToHaircutType(num: number): HaircutType {
+  if (num === 1) return "カット";
+  if (num === 2) return "前髪";
+  if (num === 3) return "坊主";
+  return "カット";
+}
+
+// --- Supabase CRUDユーティリティ ---
+// 待ち人数・お知らせ取得
+export async function fetchWaitingStatus() {
+  const { data, error } = await supabase
+    .from('waiting_status')
+    .select('*')
+    .order('id', { ascending: true })
+    .limit(1)
+    .single();
+  if (error) throw error;
+  return data;
+}
+// 待ち人数・お知らせ更新
+export async function updateWaitingStatus(updateObj: Partial<{ waiting_count: number; announcement: string; is_announcement_visible: boolean; updated_at: string; }>) {
+  const { data, error } = await supabase
+    .from('waiting_status')
+    .update(updateObj)
+    .eq('id', 1)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+// 散髪記録一覧取得
+export async function fetchHaircutRecords() {
+  const { data, error } = await supabase
+    .from('haircut_records')
+    .select('*')
+    .order('date', { ascending: false })
+    .order('time', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+// 散髪記録追加
+export async function addHaircutRecordToSupabase(date: string, time: string, haircut_type: number) {
+  const { data, error } = await supabase
+    .from('haircut_records')
+    .insert([{ date, time, haircut_type }])
+    .select();
+  if (error) throw error;
+  return data;
+}
+// 散髪記録削除
+export async function deleteHaircutRecordFromSupabase(id: number) {
+  const { error } = await supabase
+    .from('haircut_records')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+// 散髪記録更新
+export async function updateHaircutRecordInSupabase(id: number, updateObj: Partial<{ date: string; time: string; haircut_type: number }>) {
+  const { data, error } = await supabase
+    .from('haircut_records')
+    .update(updateObj)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
 
 export interface HaircutRecord {
   id: string
@@ -177,179 +254,144 @@ const generateSampleRecords = (): HaircutRecord[] => {
 
 interface SalonState {
   waitingCount: number
-  holidays: HolidayData[]
-  haircutRecords: HaircutRecord[]
   lastUpdatedTime: string
   announcement: string
   isAnnouncementVisible: boolean
-  updateWaitingCount: (count: number) => void
-  toggleHoliday: (date: string) => void
-  addHaircutRecord: (type: HaircutType) => void
-  addHaircutRecordWithDateTime: (type: HaircutType, date: string, time: string) => void
-  updateHaircutRecord: (id: string, type: HaircutType) => void
-  updateHaircutRecordFull: (record: HaircutRecord) => void
-  deleteHaircutRecord: (id: string) => void
-  getRecordsByDate: (date: string) => HaircutRecord[]
-  getCountByDate: (date: string) => number
-  getStatsByDate: (date: string) => { total: number; cut: number; bangs: number; buzz: number }
-  getStatsByMonth: (year: number, month: number) => { total: number; cut: number; bangs: number; buzz: number }
-  updateLastUpdatedTime: () => void
-  refreshData: () => void
-  updateAnnouncement: (text: string) => void
-  toggleAnnouncementVisibility: () => void
+  haircutRecords: HaircutRecord[]
+  // holidaysは現状維持
+  holidays: HolidayData[]
+  // Supabase同期用
+  fetchWaitingStatusFromDB: () => Promise<void>
+  updateWaitingCountInDB: (count: number) => Promise<void>
+  updateAnnouncementInDB: (text: string) => Promise<void>
+  toggleAnnouncementVisibilityInDB: () => Promise<void>
+  fetchHaircutRecordsFromDB: () => Promise<void>
+  addHaircutRecordToDB: (type: HaircutType) => Promise<void>
+  addHaircutRecordWithDateTimeToDB: (type: HaircutType, date: string, time: string) => Promise<void>
+  deleteHaircutRecordFromDB: (id: number) => Promise<void>
 }
 
-// Zustandストアの作成
-export const useSalonStore = create<SalonState>()(
-  persist(
-    (set, get) => ({
-      waitingCount: 3, // 初期待ち人数
-      holidays: generateInitialHolidays(),
-      haircutRecords: generateSampleRecords(),
-      lastUpdatedTime: getCurrentTime(),
-      announcement: "", // お知らせテキスト
-      isAnnouncementVisible: false, // お知らせの表示状態
+export const useSalonStore = create<SalonState>()((set, get) => ({
+  waitingCount: 0,
+  lastUpdatedTime: '',
+  announcement: '',
+  isAnnouncementVisible: false,
+  haircutRecords: [],
+  holidays: [], // holidaysは必ずDBから取得する
 
-      updateWaitingCount: (count) =>
-        set({
-          waitingCount: count,
-          lastUpdatedTime: getCurrentTime(),
-        }),
+  // --- Supabase: 待ち人数・お知らせ ---
+  fetchWaitingStatusFromDB: async () => {
+    const data = await fetchWaitingStatus();
+    set({
+      waitingCount: data.waiting_count ?? 0,
+      announcement: data.announcement ?? '',
+      isAnnouncementVisible: data.is_announcement_visible ?? false,
+      lastUpdatedTime: data.updated_at ?? '',
+    });
+  },
+  updateWaitingCountInDB: async (count: number) => {
+    const updated = await updateWaitingStatus({ waiting_count: count, updated_at: new Date().toISOString() });
+    set({
+      waitingCount: updated.waiting_count,
+      lastUpdatedTime: updated.updated_at,
+    });
+  },
+  updateAnnouncementInDB: async (text: string) => {
+    const updated = await updateWaitingStatus({ announcement: text, updated_at: new Date().toISOString() });
+    set({
+      announcement: updated.announcement,
+      lastUpdatedTime: updated.updated_at,
+    });
+  },
+  toggleAnnouncementVisibilityInDB: async () => {
+    const current = get().isAnnouncementVisible;
+    const updated = await updateWaitingStatus({ is_announcement_visible: !current, updated_at: new Date().toISOString() });
+    set({
+      isAnnouncementVisible: updated.is_announcement_visible,
+      lastUpdatedTime: updated.updated_at,
+    });
+  },
 
-      toggleHoliday: (date) =>
-        set((state) => {
-          const holidays = [...state.holidays]
-          const index = holidays.findIndex((h) => h.date === date)
+  // --- Supabase: 散髪記録 ---
+  fetchHaircutRecordsFromDB: async () => {
+    const data = await fetchHaircutRecords();
+    set({
+      haircutRecords: data.map((r: any) => ({
+        id: r.id.toString(),
+        type: numberToHaircutType(r.haircut_type),
+        timestamp: `${r.date}T${r.time}`,
+        date: r.date,
+      })),
+    });
+  },
+  addHaircutRecordToDB: async (type: HaircutType) => {
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:00`;
+    await addHaircutRecordToSupabase(date, time, haircutTypeToNumber(type));
+    await get().fetchHaircutRecordsFromDB();
+    // 待ち人数が5（受付終了）の場合は減らさない
+    if (get().waitingCount !== 5) {
+      const newCount = Math.max(0, get().waitingCount - 1);
+      await get().updateWaitingCountInDB(newCount);
+    }
+  },
+  addHaircutRecordWithDateTimeToDB: async (type: HaircutType, date: string, time: string) => {
+    await addHaircutRecordToSupabase(date, `${time}:00`, haircutTypeToNumber(type));
+    await get().fetchHaircutRecordsFromDB();
+  },
+  deleteHaircutRecordFromDB: async (id: number) => {
+    await deleteHaircutRecordFromSupabase(id);
+    await get().fetchHaircutRecordsFromDB();
+  },
+}));
 
-          if (index >= 0) {
-            holidays[index] = { ...holidays[index], isHoliday: !holidays[index].isHoliday }
-          } else {
-            holidays.push({ date, isHoliday: true })
-          }
+// --- Holidays Supabase CRUD ---
+export async function fetchHolidays() {
+  const { data, error } = await supabase
+    .from('holidays')
+    .select('*');
+  if (error) throw error;
+  return data;
+}
 
-          return { holidays }
-        }),
+export async function upsertHoliday(date: string, isHoliday: boolean) {
+  const { data, error } = await supabase
+    .from('holidays')
+    .upsert([{ date, is_holiday: isHoliday }], { onConflict: 'date' })
+    .select();
+  if (error) throw error;
+  return data;
+}
 
-      addHaircutRecord: (type) =>
-        set((state) => {
-          const now = new Date()
-          // 日本時間での日付文字列を生成
-          const dateString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+export async function updateHoliday(date: string, updateObj: Partial<{ is_holiday: boolean }>) {
+  const { data, error } = await supabase
+    .from('holidays')
+    .update(updateObj)
+    .eq('date', date)
+    .select();
+  if (error) throw error;
+  return data;
+}
 
-          const newRecord: HaircutRecord = {
-            id: `record-${Date.now()}`,
-            type,
-            timestamp: now.toISOString(),
-            date: dateString,
-          }
+export async function getNationalHolidayDates() {
+  const { data, error } = await supabase
+    .from('holidays')
+    .select('date')
+    .eq('is_national_holiday', true);
+  if (error) throw error;
+  return data?.map((row: any) => row.date) || [];
+}
 
-          return {
-            haircutRecords: [...state.haircutRecords, newRecord],
-            // 散髪完了したら待ち人数を減らす（0未満にはならないように）
-            waitingCount: Math.max(0, state.waitingCount - 1),
-            lastUpdatedTime: getCurrentTime(),
-          }
-        }),
-
-      addHaircutRecordWithDateTime: (type: HaircutType, date: string, time: string) =>
-        set((state) => {
-          // 日付と時刻を組み合わせてタイムスタンプを生成
-          const [hours, minutes] = time.split(':').map(Number)
-          const recordDate = new Date(date)
-          recordDate.setHours(hours, minutes, 0, 0)
-
-          const newRecord: HaircutRecord = {
-            id: `record-${Date.now()}`,
-            type,
-            timestamp: recordDate.toISOString(),
-            date: date,
-          }
-
-          return {
-            haircutRecords: [...state.haircutRecords, newRecord],
-            lastUpdatedTime: getCurrentTime(),
-          }
-        }),
-
-      updateHaircutRecord: (id, type) =>
-        set((state) => ({
-          haircutRecords: state.haircutRecords.map((record) =>
-            record.id === id ? { ...record, type } : record
-          ),
-          lastUpdatedTime: getCurrentTime(),
-        })),
-
-      updateHaircutRecordFull: (updatedRecord: HaircutRecord) =>
-        set((state) => ({
-          haircutRecords: state.haircutRecords.map((record) =>
-            record.id === updatedRecord.id ? updatedRecord : record
-          ),
-          lastUpdatedTime: getCurrentTime(),
-        })),
-
-      deleteHaircutRecord: (id) =>
-        set((state) => ({
-          haircutRecords: state.haircutRecords.filter((record) => record.id !== id),
-          lastUpdatedTime: getCurrentTime(),
-        })),
-
-      getRecordsByDate: (date) => {
-        return get().haircutRecords.filter((record) => record.date === date)
-      },
-
-      getCountByDate: (date) => {
-        return get().haircutRecords.filter((record) => record.date === date).length
-      },
-
-      getStatsByDate: (date: string) => {
-        const records = get().haircutRecords.filter((record) => record.date === date)
-        const stats = {
-          total: records.length,
-          cut: records.filter(r => r.type === "カット").length,
-          bangs: records.filter(r => r.type === "前髪").length,
-          buzz: records.filter(r => r.type === "坊主").length,
-        }
-        return stats
-      },
-
-      getStatsByMonth: (year: number, month: number) => {
-        const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
-        const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-31`
-        
-        const records = get().haircutRecords.filter((record) => {
-          return record.date >= monthStart && record.date <= monthEnd
-        })
-        
-        const stats = {
-          total: records.length,
-          cut: records.filter(r => r.type === "カット").length,
-          bangs: records.filter(r => r.type === "前髪").length,
-          buzz: records.filter(r => r.type === "坊主").length,
-        }
-        return stats
-      },
-
-      updateLastUpdatedTime: () => set({ lastUpdatedTime: getCurrentTime() }),
-
-      refreshData: () => set({ lastUpdatedTime: getCurrentTime() }),
-
-      updateAnnouncement: (text) =>
-        set({
-          announcement: text,
-          lastUpdatedTime: getCurrentTime(),
-        }),
-
-      toggleAnnouncementVisibility: () =>
-        set((state) => ({
-          isAnnouncementVisible: !state.isAnnouncementVisible,
-          lastUpdatedTime: getCurrentTime(),
-        })),
-    }),
-    {
-      name: "salon-storage",
-    },
-  ),
-)
+export async function getHolidayNameByDate(date: string) {
+  const { data, error } = await supabase
+    .from('holidays')
+    .select('holiday_name')
+    .eq('date', date)
+    .single();
+  if (error) return null;
+  return data?.holiday_name || null;
+}
 
 // 月のカレンダーデータを生成
 export const getMonthCalendar = (year: number, month: number) => {

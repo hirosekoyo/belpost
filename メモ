@@ -1,6 +1,8 @@
 
-https://isqzroqysdxdxacykyop.supabase.co
-
+Holidaysテーブルのデータを取得して、カレンダーを表示させたいです。
+is_holidayがTRUEのとき日付を赤四角で囲んで、is_national_holidayがTRUEの時と土曜日、日曜日は赤文字にして、カレンダーの下側に次の書式で祝日名を表示してください。
+例
+21日：海の日 /
 
 現在はサンプルデータを使っていますが
 supabeseを使ってデータベースで実装しようと思います。
@@ -31,3 +33,46 @@ updated_at: 最終更新時刻（現在のアプリで使用されているlastU
 
 以上。
 
+create table waiting_status (
+  id serial primary key,
+  waiting_count integer not null,
+  announcement text,
+  is_announcement_visible boolean not null default false,
+  updated_at timestamp with time zone not null default now()
+);
+
+create table holidays (
+  id serial primary key,
+  date date not null,
+  is_holiday boolean not null default false,
+  is_national_holiday boolean not null default false,
+  holiday_name text
+);
+
+create table haircut_records (
+  id serial primary key,
+  date date not null,
+  time time not null,
+  haircut_type integer not null
+);
+
+create view daily_stats as
+select
+  date,
+  count(*) as total_cuts,
+  sum(haircut_type) as total_haircut_types
+from haircut_records
+group by date
+order by date;
+
+create view monthly_stats as
+select
+  to_char(date, 'YYYY-MM') as month,
+  count(*) as total_cuts,
+  sum(haircut_type) as total_haircut_types
+from haircut_records
+group by month
+order by month;
+
+https://isqzroqysdxdxacykyop.supabase.co
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzcXpyb3F5c2R4ZHhhY3lreW9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MTU0MTcsImV4cCI6MjA2ODE5MTQxN30.Qq0xgqUieXqhFeY_NOQah1fvtoVPY9Hss5DiGfC2zOw

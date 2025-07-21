@@ -8,20 +8,17 @@ import { Badge } from "@/components/ui/badge"
 import { Clock, Users, CalendarIcon, Menu, RefreshCw, Megaphone } from "lucide-react"
 import {
   useSalonStore,
-  getCurrentTime,
-  getCalendarData,
   getBusinessHoursText,
   getCurrentBusinessStatus,
   getBusinessHoursInfo,
+  getCalendarData,
 } from "@/lib/data"
 import { useSwipe } from "@/hooks/use-swipe"
 
 export default function HomePage() {
-  const { waitingCount, holidays, lastUpdatedTime, announcement, isAnnouncementVisible, refreshData } = useSalonStore()
-  const [currentTime, setCurrentTime] = useState(getCurrentTime())
+  const { waitingCount, holidays, lastUpdatedTime, announcement, isAnnouncementVisible, fetchWaitingStatusFromDB } = useSalonStore()
+  const [displayTime, setDisplayTime] = useState("")
   const [currentCalendarIndex, setCurrentCalendarIndex] = useState(0)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [feedback, setFeedback] = useState<string>("")
   const calendarData = getCalendarData()
   const calendarRef = useRef<HTMLDivElement>(null)
   const now = new Date()
@@ -29,7 +26,6 @@ export default function HomePage() {
   const businessStatus = getCurrentBusinessStatus(now, holidays)
   const businessHoursInfo = getBusinessHoursInfo()
 
-  // スワイプハンドラーを設定
   useSwipe(calendarRef, {
     onSwipeLeft: () => {
       if (currentCalendarIndex < calendarData.length - 1) {
@@ -43,34 +39,17 @@ export default function HomePage() {
     },
   })
 
-  // 1分ごとに時間を更新
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(getCurrentTime())
-    }, 60000)
-
-    return () => clearInterval(timer)
+    fetchWaitingStatusFromDB()
   }, [])
 
-  // フィードバック表示用の関数
-  const showFeedback = (message: string) => {
-    setFeedback(message)
-    setTimeout(() => setFeedback(""), 3000)
-  }
-
-  // 更新ボタンのハンドラー
-  const handleRefresh = async () => {
-    setIsRefreshing(true)
-
-    // 少し遅延を入れてローディング感を演出
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    refreshData()
-    setCurrentTime(getCurrentTime())
-
-    setIsRefreshing(false)
-    showFeedback("情報を更新しました")
-  }
+  useEffect(() => {
+    if (lastUpdatedTime) {
+      // hh:mm形式で表示
+      const d = new Date(lastUpdatedTime)
+      setDisplayTime(`${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`)
+    }
+  }, [lastUpdatedTime])
 
   // 休日かどうかを判定する関数
   const isHoliday = (date: string) => {
@@ -90,9 +69,7 @@ export default function HomePage() {
       </header>
 
       {/* フィードバックメッセージ */}
-      {feedback && (
-        <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg text-blue-800 text-sm">{feedback}</div>
-      )}
+      {/* 更新ボタンやisRefreshing, setCurrentTime, handleRefresh等は全て削除 */}
 
       <div className="space-y-6">
         {/* お知らせ表示 */}
@@ -117,18 +94,7 @@ export default function HomePage() {
                 <Clock className="h-5 w-5" />
                 現在の待ち時間
               </span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm">{lastUpdatedTime} 時点</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
+              <span className="text-sm">{displayTime && `${displayTime} 時点`}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6">
@@ -147,7 +113,7 @@ export default function HomePage() {
                       <>
                         <p className="text-4xl font-bold">{waitingCount}人</p>
                         <p className="text-muted-foreground text-sm mt-2">
-                          {waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間です` : "すぐにご案内できます"}
+                          {waitingCount > 0 ? `およそ ${waitingCount * 30} 分のお待ち時間です` : "すぐにご案内できます"}
                         </p>
                       </>
                     )}

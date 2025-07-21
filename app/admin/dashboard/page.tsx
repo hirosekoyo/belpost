@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,19 +14,20 @@ import { FooterNav } from "@/components/footer-nav"
 export default function DashboardPage() {
   const {
     waitingCount,
-    holidays,
     announcement,
     isAnnouncementVisible,
-    updateWaitingCount,
-    toggleHoliday,
-    addHaircutRecord,
-    updateLastUpdatedTime,
-    updateAnnouncement,
-    toggleAnnouncementVisibility,
+    fetchWaitingStatusFromDB,
+    updateWaitingCountInDB,
+    addHaircutRecordToDB,
+    updateAnnouncementInDB,
+    toggleAnnouncementVisibilityInDB,
+    holidays,
+    // toggleHoliday, // ←削除
   } = useSalonStore()
   const [selectedType, setSelectedType] = useState<HaircutType>("カット")
-  const [feedback, setFeedback] = useState<string>("")
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState(false)
+  const [announcementDraft, setAnnouncementDraft] = useState(announcement)
+  const [haircutSaved, setHaircutSaved] = useState(false)
 
   // 現在の年月を取得
   const today = new Date()
@@ -35,6 +36,14 @@ export default function DashboardPage() {
 
   const calendarData = getCalendarForMonth(currentYear, currentMonth)
   const calendarRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    fetchWaitingStatusFromDB()
+  }, [])
+
+  useEffect(() => {
+    setAnnouncementDraft(announcement)
+  }, [announcement])
 
   // スワイプハンドラーを設定
   useSwipe(calendarRef, {
@@ -50,17 +59,9 @@ export default function DashboardPage() {
     },
   })
 
-  // フィードバック表示用の関数
-  const showFeedback = (message: string) => {
-    setFeedback(message)
-    setTimeout(() => setFeedback(""), 3000)
-  }
-
   // 待ち人数を選択する関数
-  const handleWaitingCountSelect = (count: number) => {
-    updateWaitingCount(count)
-    updateLastUpdatedTime()
-    showFeedback(`待ち人数を${count}人に設定しました`)
+  const handleWaitingCountSelect = async (count: number) => {
+    await updateWaitingCountInDB(count)
   }
 
   // お知らせの編集開始
@@ -68,26 +69,20 @@ export default function DashboardPage() {
     setIsEditingAnnouncement(true)
     // 編集開始時に自動的に非表示にする
     if (isAnnouncementVisible) {
-      toggleAnnouncementVisibility()
+      toggleAnnouncementVisibilityInDB()
     }
   }
 
-  // お知らせの更新
-  const handleAnnouncementUpdate = (text: string) => {
-    updateAnnouncement(text)
+  // お知らせの表示切り替え時にのみ内容を更新
+  const handleToggleAnnouncementVisibility = async () => {
+    await updateAnnouncementInDB(announcementDraft)
+    await toggleAnnouncementVisibilityInDB()
   }
 
-
-
-  // お知らせの表示切り替え
-  const handleToggleAnnouncementVisibility = () => {
-    toggleAnnouncementVisibility()
-    showFeedback(isAnnouncementVisible ? "お知らせを非表示にしました" : "お知らせを表示しました")
-  }
-
-  const handleHaircutSubmit = () => {
-    addHaircutRecord(selectedType)
-    showFeedback(`${selectedType}の記録を追加しました`)
+  const handleHaircutSubmit = async () => {
+    await addHaircutRecordToDB(selectedType)
+    setHaircutSaved(true)
+    setTimeout(() => setHaircutSaved(false), 2000)
   }
 
   // 前月へ移動
@@ -117,11 +112,7 @@ export default function DashboardPage() {
       </header>
 
       {/* フィードバックメッセージ */}
-      {feedback && (
-        <div className="mb-4 p-3 bg-green-100 border border-green-200 rounded-lg text-green-800 text-sm">
-          {feedback}
-        </div>
-      )}
+      {/* フィードバックやトースト表示部分は全て削除 */}
 
       <div className="space-y-6">
         <Card>
@@ -138,7 +129,7 @@ export default function DashboardPage() {
                 <div className="text-center mb-4">
                       <p className="text-3xl font-bold text-primary">{waitingCount === 5 ? "受付終了" : `${waitingCount}人`}</p>
                       <p className="text-sm text-muted-foreground">
-                        {waitingCount === 5 ? "本日の受付は終了しました" : waitingCount > 0 ? `およそ ${waitingCount * 25} 分のお待ち時間` : "すぐにご案内できます"}
+                        {waitingCount === 5 ? "本日の受付は終了しました" : waitingCount > 0 ? `およそ ${waitingCount * 30} 分のお待ち時間` : "すぐにご案内できます"}
                       </p>
                 </div>
 
@@ -217,8 +208,12 @@ export default function DashboardPage() {
                   </div>
                 </RadioGroup>
 
-                <Button onClick={handleHaircutSubmit} className="w-full mt-2">
-                  <Check className="mr-2 h-4 w-4" /> 散髪完了
+                <Button 
+                  onClick={handleHaircutSubmit} 
+                  variant={haircutSaved ? "destructive" : "default"}
+                  className="w-full mt-2"
+                >
+                  {haircutSaved ? '保存しました' : <><Check className="mr-2 h-4 w-4" /> 散髪完了</>}
                 </Button>
               </div>
             </div>
@@ -238,12 +233,12 @@ export default function DashboardPage() {
               <div>
                 <label className="text-sm font-medium mb-2 block">お知らせ内容</label>
                 <textarea
-                  value={announcement}
-                  onChange={(e) => handleAnnouncementUpdate(e.target.value)}
+                  value={announcementDraft}
+                  onChange={(e) => setAnnouncementDraft(e.target.value)}
                   onFocus={handleAnnouncementEditStart}
                   onBlur={() => {
                     setIsEditingAnnouncement(false)
-                    showFeedback("お知らせを更新しました")
+                    // フィードバックやトースト表示部分は全て削除
                   }}
                   placeholder="お知らせを入力してください..."
                   className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24"
@@ -309,7 +304,7 @@ export default function DashboardPage() {
                 {calendarData.days.map((day) => (
                   <button
                     key={day.date}
-                    onClick={() => toggleHoliday(day.date)}
+                    // onClick={() => toggleHoliday(day.date)} // ←削除またはコメントアウト
                     className={`p-2 rounded-md relative ${
                       isHoliday(day.date)
                         ? "bg-red-100 text-red-600"

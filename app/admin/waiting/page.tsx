@@ -1,16 +1,19 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react"
-import { useSalonStore, getCalendarForMonth, getPrevMonth, getNextMonth } from "@/lib/data"
+import { getCalendarForMonth, getPrevMonth, getNextMonth, fetchHolidays, upsertHoliday } from "@/lib/data"
 import { useSwipe } from "@/hooks/use-swipe"
 
 export default function WaitingPage() {
-  const { waitingCount, holidays, updateWaitingCount, toggleHoliday } = useSalonStore()
+  const [holidays, setHolidays] = useState<any[]>([])
+  const [nationalHolidays, setNationalHolidays] = useState<string[]>([])
+  const [holidayNames, setHolidayNames] = useState<{ date: string, name: string }[]>([])
+  const [waitingCount, setWaitingCount] = useState(0)
   const [count, setCount] = useState(waitingCount)
 
   // 現在の年月を取得
@@ -35,10 +38,55 @@ export default function WaitingPage() {
     },
   })
 
+  // holidays再取得関数
+  const reloadHolidays = async () => {
+    console.log("fetchHolidays called");
+    const data = await fetchHolidays();
+    // サンプル: 取得データをalertで表示（デバッグ用）
+    alert("fetchHolidays data:\n" + JSON.stringify(data, null, 2));
+    console.log("fetchHolidays data:", data);
+    // すべてのデータを isHoliday: boolean で統一
+    const normalized = data.map((h: any) => ({
+      ...h,
+      isHoliday: h.is_holiday === true,
+      isNationalHoliday: h.is_national_holiday === true,
+      // 日付をゼロ埋めで厳密に
+      date: h.date ? new Date(h.date).toISOString().split('T')[0] : '',
+    }));
+    setHolidays(normalized);
+    setNationalHolidays(normalized.filter((h: any) => h.isNationalHoliday).map((h: any) => h.date));
+    setHolidayNames(normalized.filter((h: any) => h.holiday_name).map((h: any) => ({ date: h.date, name: h.holiday_name })));
+  };
 
+  useEffect(() => {
+    console.log("useEffect fired");
+    reloadHolidays();
+  }, [currentYear, currentMonth]);
+
+  useEffect(() => {
+    console.log('holidays:', holidays);
+  }, [holidays]);
+
+  const isHoliday = (date: string) => {
+    const h = holidays.find((h: any) => h.date === date);
+    return h?.isHoliday === true;
+  };
+  const isNationalHoliday = (date: string) => {
+    return nationalHolidays.includes(date);
+  };
+
+  const handleDayClick = async (date: string) => {
+    const h = holidays.find((h: any) => h.date === date);
+    if (h?.isHoliday === true) {
+      await upsertHoliday(date, false);
+    } else {
+      await upsertHoliday(date, true);
+    }
+    await reloadHolidays();
+  };
 
   const handleSave = () => {
-    updateWaitingCount(count)
+    setWaitingCount(count)
   }
 
   // 前月へ移動
@@ -53,12 +101,6 @@ export default function WaitingPage() {
     const { year, month } = getNextMonth(currentYear, currentMonth)
     setCurrentYear(year)
     setCurrentMonth(month)
-  }
-
-  // 休日かどうかを判定する関数
-  const isHoliday = (date: string) => {
-    const holiday = holidays.find((h) => h.date === date)
-    return holiday?.isHoliday || false
   }
 
   return (
@@ -129,14 +171,14 @@ export default function WaitingPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <Button variant="ghost" size="icon" onClick={handlePrevMonth}>
+                <Button variant="ghost" size="icon" onClick={() => { const { year, month } = getPrevMonth(currentYear, currentMonth); setCurrentYear(year); setCurrentMonth(month); }}>
                   <ChevronLeft className="h-5 w-5" />
                 </Button>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <CalendarIcon className="h-5 w-5" />
                   {calendarData.name}
                 </CardTitle>
-                <Button variant="ghost" size="icon" onClick={handleNextMonth}>
+                <Button variant="ghost" size="icon" onClick={() => { const { year, month } = getNextMonth(currentYear, currentMonth); setCurrentYear(year); setCurrentMonth(month); }}>
                   <ChevronRight className="h-5 w-5" />
                 </Button>
               </div>
@@ -151,39 +193,47 @@ export default function WaitingPage() {
                     {day}
                   </div>
                 ))}
-
                 {/* 月の1日目の曜日に合わせて空白を挿入 */}
                 {Array.from({ length: calendarData.days[0].dayOfWeek }).map((_, i) => (
                   <div key={`empty-${i}`} className="p-2"></div>
                 ))}
-
-                {calendarData.days.map((day) => (
-                  <button
-                    key={day.date}
-                    onClick={() => toggleHoliday(day.date)}
-                    className={`p-2 rounded-md relative ${
-                      isHoliday(day.date)
-                        ? "bg-red-100 text-red-600"
-                        : day.dayOfWeek === 0
-                          ? "text-red-500"
-                          : day.dayOfWeek === 6
-                            ? "text-blue-500"
-                            : ""
-                    }`}
-                  >
-                    {day.day}
-                    {isHoliday(day.date) && (
-                      <Badge variant="destructive" className="absolute top-0 right-0 text-[8px] h-3 min-w-3 px-0.5">
-                        休
-                      </Badge>
-                    )}
-                  </button>
-                ))}
+                {calendarData.days.map((day) => {
+                  const h = holidays.find((h: any) => h.date === day.date)
+                  const isSat = day.dayOfWeek === 6
+                  const isSun = day.dayOfWeek === 0
+                  const isNatHol = isNationalHoliday(day.date) // DBのデータのみ
+                  const isShopHol = h?.isHoliday === true     // DBのデータのみ
+                  // 赤文字条件: 国民の祝日 or 日曜 or 土曜
+                  const isRed = isNatHol || isSun || isSat
+                  // 赤枠条件: 店舗休日
+                  const borderClass = isShopHol ? "border-2 border-red-500" : ""
+                  // 赤文字条件: 国民の祝日 or 日曜 or 土曜
+                  const textClass = isNatHol || isSun || isSat ? "text-red-500" : isShopHol ? "text-red-600" : isSat ? "text-blue-500" : ""
+                  return (
+                    <button
+                      key={day.date}
+                      onClick={() => handleDayClick(day.date)}
+                      className={`p-2 rounded-md relative ${borderClass} ${textClass} ${isShopHol ? "bg-red-100" : ""}`}
+                    >
+                      {day.day}
+                      {isShopHol && (
+                        <Badge variant="destructive" className="absolute top-0 right-0 text-[8px] h-3 min-w-3 px-0.5">
+                          休
+                        </Badge>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* 祝日名リスト */}
+              <div className="mt-4 text-xs text-muted-foreground">
+                {holidayNames
+                  .filter(h => h.name && h.date.slice(0, 7) === `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`)
+                  .map(h => `${parseInt(h.date.split('-')[2], 10)}日：${h.name} / `)}
               </div>
             </CardContent>
           </Card>
         </div>
-
         <div className="fixed bottom-4 left-0 right-0 text-center text-xs text-muted-foreground">
           <p>左右にスワイプして月を切り替えられます</p>
         </div>

@@ -10,13 +10,14 @@ import { ArrowLeft, Scissors, Check } from "lucide-react"
 import { useSalonStore, type HaircutType } from "@/lib/data"
 import { toast } from "@/components/ui/use-toast"
 import { ToastAction } from "@/components/ui/toast"
+import { useEffect } from "react"
 
 export default function RecordPage() {
-  const { addHaircutRecord } = useSalonStore()
+  const { addHaircutRecordToDB } = useSalonStore()
   const [selectedType, setSelectedType] = useState<HaircutType>("カット")
 
-  const handleSubmit = () => {
-    addHaircutRecord(selectedType)
+  const handleSubmit = async () => {
+    await addHaircutRecordToDB(selectedType)
     toast({
       title: "散髪記録を保存しました",
       description: `${selectedType}の記録を追加しました`,
