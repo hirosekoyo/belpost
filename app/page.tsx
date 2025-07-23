@@ -12,11 +12,15 @@ import {
   getCurrentBusinessStatus,
   getBusinessHoursInfo,
   getCalendarData,
+  fetchHolidays,
+  HolidayData,
 } from "@/lib/data"
 import { useSwipe } from "@/hooks/use-swipe"
 
 export default function HomePage() {
-  const { waitingCount, holidays, lastUpdatedTime, announcement, isAnnouncementVisible, fetchWaitingStatusFromDB } = useSalonStore()
+  // holidaysをuseStateでローカル管理
+  const [holidays, setHolidays] = useState<HolidayData[]>([])
+  const { waitingCount, lastUpdatedTime, announcement, isAnnouncementVisible, fetchWaitingStatusFromDB } = useSalonStore()
   const [displayTime, setDisplayTime] = useState("")
   const [currentCalendarIndex, setCurrentCalendarIndex] = useState(0)
   const calendarData = getCalendarData()
@@ -41,6 +45,21 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchWaitingStatusFromDB()
+    // holidaysもSupabaseから取得してセット
+    fetchHolidays().then((data) => {
+      // isHoliday, is_holiday, is_national_holiday, holiday_nameを正規化
+      const normalized = data.map((h: any) => ({
+        ...h,
+        isHoliday: h.is_holiday === true,
+        is_holiday: h.is_holiday === true,
+        is_national_holiday: h.is_national_holiday === true,
+        holiday_name: h.holiday_name ?? '',
+        date: h.date ? new Date(h.date).toISOString().split('T')[0] : '',
+      }))
+      // useSalonStoreのholidaysにセット
+      // set関数はuseSalonStoreの外から呼べないので、useStateでローカル管理
+      setHolidays(normalized)
+    })
   }, [])
 
   useEffect(() => {
@@ -183,27 +202,49 @@ export default function HomePage() {
                   <div key={`empty-${i}`} className="p-2"></div>
                 ))}
 
-                {calendarData[currentCalendarIndex].days.map((day) => (
-                  <div
-                    key={day.date}
-                    className={`p-2 rounded-md relative ${
-                      isHoliday(day.date)
-                        ? "bg-red-100 text-red-600"
-                        : day.dayOfWeek === 0
-                          ? "text-red-500"
-                          : day.dayOfWeek === 6
-                            ? "text-blue-500"
-                            : ""
-                    }`}
-                  >
-                    {day.day}
-                    {isHoliday(day.date) && (
-                      <Badge variant="destructive" className="absolute top-0 right-0 text-[8px] h-3 min-w-3 px-0.5">
-                        休
-                      </Badge>
-                    )}
-                  </div>
-                ))}
+                {calendarData[currentCalendarIndex].days.map((day) => {
+                  const h = holidays.find((h) => h.date === day.date)
+                  const isSat = day.dayOfWeek === 6
+                  const isSun = day.dayOfWeek === 0
+                  const isNatHol = h?.is_national_holiday === true
+                  const isShopHol = h?.isHoliday === true || h?.is_holiday === true
+                  // デザイン優先順位: 店休日(赤背景) > 国民の祝日(赤文字) > 日曜(赤文字) > 土曜(青文字)
+                  let textClass = ''
+                  let bgClass = ''
+                  if (isShopHol) {
+                    bgClass = 'bg-red-100'
+                    if (isSun || isSat || isNatHol) {
+                      textClass = isSat ? 'text-blue-500' : 'text-red-600'
+                    } else {
+                      textClass = 'text-black'
+                    }
+                  } else if (isNatHol) {
+                    textClass = 'text-red-500'
+                  } else if (isSun) {
+                    textClass = 'text-red-500'
+                  } else if (isSat) {
+                    textClass = 'text-blue-500'
+                  }
+                  return (
+                    <div
+                      key={day.date}
+                      className={`p-2 rounded-md relative ${bgClass} ${textClass}`}
+                    >
+                      {day.day}
+                      {isShopHol && (
+                        <Badge variant="destructive" className="absolute top-0 right-0 text-[8px] h-3 min-w-3 px-0.5">
+                          休
+                        </Badge>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              {/* 祝日名リスト */}
+              <div className="mt-4 text-xs text-muted-foreground">
+                {holidays
+                  .filter(h => h.holiday_name && h.date.slice(0, 7) === calendarData[currentCalendarIndex].days[0].date.slice(0, 7))
+                  .map(h => `${parseInt(h.date.split('-')[2], 10)}日：${h.holiday_name} / `)}
               </div>
             </CardContent>
           </Card>

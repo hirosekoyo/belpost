@@ -90,6 +90,9 @@ export interface HaircutRecord {
 export interface HolidayData {
   date: string
   isHoliday: boolean
+  is_holiday?: boolean
+  is_national_holiday?: boolean
+  holiday_name?: string
 }
 
 // ユーティリティ関数を先に定義

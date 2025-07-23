@@ -19,17 +19,21 @@ import {
   type HaircutType,
   updateHaircutRecordInSupabase,
   haircutTypeToNumber,
+  fetchHolidays,
+  HolidayData,
 } from "@/lib/data"
 import { useSwipe } from "@/hooks/use-swipe"
 import { FooterNav } from "@/components/footer-nav"
 
 export default function StatsPage() {
+  // holidaysをuseStateでローカル管理
+  const [holidays, setHolidays] = useState<HolidayData[]>([])
   const {
     haircutRecords,
     fetchHaircutRecordsFromDB,
     addHaircutRecordWithDateTimeToDB,
     deleteHaircutRecordFromDB,
-    holidays,
+    // holidays,
   } = useSalonStore()
   const [selectedDate, setSelectedDate] = useState("")
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
@@ -48,6 +52,18 @@ export default function StatsPage() {
     setIsClient(true)
     setSelectedDate(getCurrentDate()) // 当日の日付を設定
     fetchHaircutRecordsFromDB()
+    // holidaysもSupabaseから取得してセット
+    fetchHolidays().then((data) => {
+      const normalized = data.map((h: any) => ({
+        ...h,
+        isHoliday: h.is_holiday === true,
+        is_holiday: h.is_holiday === true,
+        is_national_holiday: h.is_national_holiday === true,
+        holiday_name: h.holiday_name ?? '',
+        date: h.date ? new Date(h.date).toISOString().split('T')[0] : '',
+      }))
+      setHolidays(normalized)
+    })
   }, [])
 
   const calendarData = getCalendarForMonth(currentYear, currentMonth)
@@ -225,26 +241,39 @@ export default function StatsPage() {
                 ))}
 
                 {calendarData.days.map((day) => {
+                  const h = (holidays as any[]).find((h) => h.date === day.date)
+                  const isSat = day.dayOfWeek === 6
+                  const isSun = day.dayOfWeek === 0
+                  // any型で扱い、is_national_holiday, is_holiday, isHolidayのいずれかで判定
+                  const isNatHol = h?.is_national_holiday === true
+                  const isShopHol = h?.isHoliday === true || h?.is_holiday === true
+                  // デザイン優先順位: 店休日(赤背景) > 国民の祝日(赤文字) > 日曜(赤文字) > 土曜(青文字)
+                  let textClass = ''
+                  let bgClass = ''
+                  if (isShopHol) {
+                    bgClass = 'bg-red-100'
+                    if (isSun || isSat || isNatHol) {
+                      textClass = isSat ? 'text-blue-500' : 'text-red-600'
+                    } else {
+                      textClass = 'text-black'
+                    }
+                  } else if (isNatHol) {
+                    textClass = 'text-red-500'
+                  } else if (isSun) {
+                    textClass = 'text-red-500'
+                  } else if (isSat) {
+                    textClass = 'text-blue-500'
+                  }
                   const count = isClient ? haircutRecords.filter(r => r.date === day.date).length : 0
                   return (
                     <button
                       key={day.date}
                       onClick={() => setSelectedDate(day.date)}
-                      className={`p-2 rounded-md relative ${
-                        selectedDate === day.date
-                          ? "bg-primary text-primary-foreground"
-                          : isHoliday(day.date)
-                            ? "bg-red-100 text-red-600"
-                            : day.dayOfWeek === 0
-                              ? "text-red-500"
-                              : day.dayOfWeek === 6
-                                ? "text-blue-500"
-                                : ""
-                      }`}
+                      className={`p-2 rounded-md relative ${bgClass} ${textClass} ${selectedDate === day.date ? 'ring-2 ring-primary' : ''}`}
                     >
                       {day.day}
                       {isClient && count > 0 && <Badge className="absolute top-0 right-0 text-[8px] h-4 min-w-4">{count}</Badge>}
-                      {isHoliday(day.date) && count === 0 && (
+                      {isShopHol && (
                         <Badge variant="destructive" className="absolute top-0 right-0 text-[8px] h-3 min-w-3 px-0.5">
                           休
                         </Badge>
@@ -252,6 +281,12 @@ export default function StatsPage() {
                     </button>
                   )
                 })}
+              </div>
+              {/* 祝日名リスト */}
+              <div className="mt-4 text-xs text-muted-foreground">
+                {holidays
+                  .filter(h => h.holiday_name && h.date.slice(0, 7) === calendarData.days[0].date.slice(0, 7))
+                  .map(h => `${parseInt(h.date.split('-')[2], 10)}日：${h.holiday_name} / `)}
               </div>
             </CardContent>
           </Card>

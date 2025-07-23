@@ -115,6 +115,11 @@ export default function WaitingPage() {
       </header>
 
       <div className="space-y-6">
+        {/* --- デバッグ用: holidaysデータの中身を表示 --- */}
+        <div className="my-4 p-2 bg-gray-100 text-xs rounded">
+          <div>holidaysデータ:</div>
+          <pre>{JSON.stringify(holidays, null, 2)}</pre>
+        </div>
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">待ち人数設定</CardTitle>
