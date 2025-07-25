@@ -76,6 +76,38 @@ export default function HomePage() {
     return holiday?.isHoliday || false
   }
 
+  // data.tsからコピーしている　ひろせ
+  const getCurrentDate = (): string => {
+    const formatter = new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return formatter.format(new Date()).replace(/\//g, '-');
+  };
+
+  // 今日の日付文字列
+  // const todayStr = now.toISOString().split('T')[0]
+  const todayStr = getCurrentDate();
+  const todayHoliday = holidays.find(h => h.date === todayStr)
+  const isShopHoliday = todayHoliday?.isHoliday === true || todayHoliday?.is_holiday === true
+  const isNationalHoliday = todayHoliday?.is_national_holiday === true
+  const dayOfWeek = now.getDay() // 0:日, 6:土
+  const isSat = dayOfWeek === 6
+  const isSun = dayOfWeek === 0
+  const hours = now.getHours()
+  const minutes = now.getMinutes()
+  const isBeforeOpening = hours < 9
+  const isLunch = hours === 12
+  // 営業時間テキスト
+  let businessHourText = ''
+    if (isNationalHoliday || isSat || isSun) {
+      businessHourText = '営業時間　 9:00 〜 19:00（土日祝）'
+    } else {
+      businessHourText = '営業時間　 9:00 〜 20:00（平日）'
+    }
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-md pb-20">
       <header className="flex justify-between items-center mb-6">
@@ -120,14 +152,37 @@ export default function HomePage() {
             <div className="flex items-center justify-center gap-4">
               <Users className="h-10 w-10 text-muted-foreground" />
               <div className="text-center">
+              
+                {/* 休業日 */}
+                {isShopHoliday ? (
+                  <>
+                    <p className="text-4xl font-bold text-destructive">本日は休業日です</p>
+                    </>
+                ) : isBeforeOpening ? (
+                  <p className="text-4xl font-bold text-gray-500">開店前です</p>
+                ) : isLunch ? (
+                  <>
+                    <p className="text-4xl font-bold text-orange-600">昼休み中です</p>
+                  </>
+                ) : (
+                  <>
                     <p className="text-muted-foreground text-sm">現在の待ち人数</p>
                     {waitingCount === 5 ? (
-                      <>
-                        <p className="text-4xl font-bold text-destructive">受付終了</p>
-                        <p className="text-muted-foreground text-sm mt-2">
-                          本日の受付は終了しました
-                        </p>
-                      </>
+                      hours === 10 || hours === 11 ?  (
+                        <>
+                          <p className="text-4xl font-bold text-destructive">受付終了</p>
+                          <p className="text-muted-foreground text-sm mt-2">
+                            午前中の受付は終了しました
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-4xl font-bold text-destructive">受付終了</p>
+                          <p className="text-muted-foreground text-sm mt-2">
+                            本日の受付は終了しました
+                          </p>
+                        </>
+                      )
                     ) : (
                       <>
                         <p className="text-4xl font-bold">{waitingCount}人</p>
@@ -136,27 +191,21 @@ export default function HomePage() {
                         </p>
                       </>
                     )}
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-border">
-              <div className="flex justify-between items-center">
-                <span className="text-sm">{businessHoursText}</span>
-                <Badge
-                  variant={
-                    businessStatus === "営業中"
-                      ? "default"
-                      : businessStatus === "昼休み"
-                        ? "outline"
-                          : businessStatus === "休業日"
-                            ? "destructive"
-                            : "secondary"
-                  }
-                >
-                  {businessStatus}
-                </Badge>
+            {/* 営業時間表示 */}
+            {(!isShopHoliday) && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">{businessHourText}<br />
+                  昼休み　　12:00 〜 13:00</span>
+                  
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 

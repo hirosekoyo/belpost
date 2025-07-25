@@ -107,9 +107,18 @@ export const formatTime = (timestamp: string): string => {
 }
 
 // 現在の日付を取得
+// export const getCurrentDate = (): string => {
+//   return new Date().toISOString().split("T")[0]
+// }
 export const getCurrentDate = (): string => {
-  return new Date().toISOString().split("T")[0]
-}
+  const formatter = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(new Date()).replace(/\//g, '-');
+};
 
 // 現在の時刻を取得
 export const getCurrentTime = (): string => {
